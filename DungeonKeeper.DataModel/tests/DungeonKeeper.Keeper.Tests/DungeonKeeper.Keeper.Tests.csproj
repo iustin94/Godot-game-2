@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DungeonKeeper.Keeper\DungeonKeeper.Keeper.csproj" />
+    <ProjectReference Include="..\..\src\DungeonKeeper.Core\DungeonKeeper.Core.csproj" />
   </ItemGroup>
 
 </Project>
