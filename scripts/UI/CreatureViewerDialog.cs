@@ -110,11 +110,24 @@ public partial class CreatureViewerDialog : Control
             Size = new Vector2I(260, 380),
             RenderTargetUpdateMode = SubViewport.UpdateMode.Always,
             TransparentBg = true,
-            Msaa3D = SubViewport.Msaa.Msaa4X
+            Msaa3D = SubViewport.Msaa.Msaa4X,
+            OwnWorld3D = true
         };
 
         // Set up 3D scene inside viewport
         var scene = new Node3D();
+
+        // Set up an environment with transparent background
+        var env = new Godot.Environment();
+        env.BackgroundMode = Godot.Environment.BGMode.Color;
+        env.BackgroundColor = new Color(0, 0, 0, 0);
+        env.AmbientLightSource = Godot.Environment.AmbientSource.Color;
+        env.AmbientLightColor = new Color(0.3f, 0.3f, 0.35f);
+        env.AmbientLightEnergy = 0.5f;
+
+        var worldEnv = new WorldEnvironment();
+        worldEnv.Environment = env;
+        scene.AddChild(worldEnv);
 
         // Camera
         var camera = new Camera3D();
