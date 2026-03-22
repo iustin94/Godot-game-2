@@ -34,6 +34,7 @@ public sealed class CreatureDefinition
     public bool CannotBeAttractedViaPortal { get; }
 
     public float ManaDrainPerSecond { get; }
+    public string Description { get; }
 
     internal CreatureDefinition(
         CreatureType type,
@@ -55,7 +56,8 @@ public sealed class CreatureDefinition
         bool canFly,
         bool isUndead,
         bool cannotBeAttractedViaPortal,
-        float manaDrainPerSecond)
+        float manaDrainPerSecond,
+        string description)
     {
         Type = type;
         Faction = faction;
@@ -77,5 +79,6 @@ public sealed class CreatureDefinition
         IsUndead = isUndead;
         CannotBeAttractedViaPortal = cannotBeAttractedViaPortal;
         ManaDrainPerSecond = manaDrainPerSecond;
+        Description = description;
     }
 }

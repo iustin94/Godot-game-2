@@ -21,6 +21,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.Imp)
             .WithFaction(CreatureFaction.Keeper)
             .WithName("Imp")
+            .WithDescription("A tireless worker that digs tunnels, mines gold, and claims territory. Weak in combat but essential for building your dungeon.")
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 200, MeleeAttack: 30, MeleeDamage: 5,
                 Defense: 20, Armor: 0, Luck: 50, Speed: 48f,
@@ -39,6 +40,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.Goblin)
             .WithFaction(CreatureFaction.Keeper)
             .WithName("Goblin")
+            .WithDescription("A small green warrior. Cheap and eager to fight, Goblins excel in the training room and make reliable guards.")
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 600, MeleeAttack: 80, MeleeDamage: 15,
                 Defense: 60, Armor: 5, Luck: 60, Speed: 40f,
@@ -59,6 +61,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.Warlock)
             .WithFaction(CreatureFaction.Keeper)
             .WithName("Warlock")
+            .WithDescription("A powerful spellcaster devoted to arcane research. Warlocks are invaluable in the library but despise Vampires.")
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 800, MeleeAttack: 40, MeleeDamage: 8,
                 Defense: 40, Armor: 2, Luck: 70, Speed: 32f,
@@ -80,6 +83,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.Troll)
             .WithFaction(CreatureFaction.Keeper)
             .WithName("Troll")
+            .WithDescription("A hulking brute with surprising craftsmanship. Trolls are slow but tough, and they build traps and doors in the workshop.")
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 1000, MeleeAttack: 70, MeleeDamage: 20,
                 Defense: 50, Armor: 8, Luck: 40, Speed: 28f,
@@ -98,6 +102,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.DarkElf)
             .WithFaction(CreatureFaction.Keeper)
             .WithName("Dark Elf")
+            .WithDescription("A swift and deadly ranged fighter. Dark Elves are skilled with bow and blade, and thrive in the combat pit.")
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 700, MeleeAttack: 90, MeleeDamage: 18,
                 Defense: 70, Armor: 4, Luck: 80, Speed: 44f,
@@ -118,6 +123,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.Salamander)
             .WithFaction(CreatureFaction.Keeper)
             .WithName("Salamander")
+            .WithDescription("A fire-breathing lizard creature with thick scales. Salamanders are tough fighters that love the heat of the training room.")
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 1200, MeleeAttack: 85, MeleeDamage: 22,
                 Defense: 65, Armor: 10, Luck: 60, Speed: 36f,
@@ -138,6 +144,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.BileDemon)
             .WithFaction(CreatureFaction.Keeper)
             .WithName("Bile Demon")
+            .WithDescription("A massive, foul creature that manufactures traps in the workshop. Slow but incredibly tough, and immune to poison.")
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 1800, MeleeAttack: 75, MeleeDamage: 25,
                 Defense: 55, Armor: 15, Luck: 30, Speed: 24f,
@@ -159,6 +166,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.Vampire)
             .WithFaction(CreatureFaction.Keeper)
             .WithName("Vampire")
+            .WithDescription("An undead lord of the night. Vampires are powerful fighters who drain life from their enemies and rise from the graveyard.")
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 1200, MeleeAttack: 90, MeleeDamage: 20,
                 Defense: 75, Armor: 8, Luck: 90, Speed: 40f,
@@ -181,6 +189,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.DarkMistress)
             .WithFaction(CreatureFaction.Keeper)
             .WithName("Dark Mistress")
+            .WithDescription("A sadistic warrior who thrives on pain. Dark Mistresses love the torture chamber and fight with electrifying ferocity.")
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 900, MeleeAttack: 85, MeleeDamage: 16,
                 Defense: 65, Armor: 5, Luck: 75, Speed: 40f,
@@ -201,6 +210,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.Rogue)
             .WithFaction(CreatureFaction.Keeper)
             .WithName("Rogue")
+            .WithDescription("A cunning thief who moves with unmatched speed. Rogues set traps in the workshop and enjoy the casino.")
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 650, MeleeAttack: 80, MeleeDamage: 14,
                 Defense: 70, Armor: 3, Luck: 90, Speed: 48f,
@@ -222,6 +232,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.BlackKnight)
             .WithFaction(CreatureFaction.Keeper)
             .WithName("Black Knight")
+            .WithDescription("An elite armored warrior of darkness. Black Knights are devastating in melee combat and make fearsome guards.")
             .IsElite()
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 1500, MeleeAttack: 100, MeleeDamage: 28,
@@ -244,6 +255,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.Dragon)
             .WithFaction(CreatureFaction.Keeper)
             .WithName("Dragon")
+            .WithDescription("The most fearsome creature in any dungeon. Dragons breathe fire, fly over obstacles, and hoard gold in the treasury.")
             .IsElite()
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 2000, MeleeAttack: 95, MeleeDamage: 35,
@@ -267,6 +279,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.Firefly)
             .WithFaction(CreatureFaction.Keeper)
             .WithName("Firefly")
+            .WithDescription("A tiny luminous insect that scouts your dungeon. Weak in combat but incredibly fast, Fireflies light up dark areas.")
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 300, MeleeAttack: 20, MeleeDamage: 3,
                 Defense: 30, Armor: 0, Luck: 80, Speed: 56f,
@@ -285,6 +298,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.Skeleton)
             .WithFaction(CreatureFaction.Keeper)
             .WithName("Skeleton")
+            .WithDescription("The reanimated bones of fallen heroes. Skeletons require no wages and serve as tireless guards and soldiers.")
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 500, MeleeAttack: 65, MeleeDamage: 12,
                 Defense: 50, Armor: 3, Luck: 30, Speed: 32f,
@@ -304,6 +318,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.Horny)
             .WithFaction(CreatureFaction.Keeper)
             .WithName("Horned Reaper")
+            .WithDescription("The ultimate killing machine. The Horned Reaper is devastatingly powerful but dangerously unpredictable and short-tempered.")
             .IsElite()
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 3000, MeleeAttack: 120, MeleeDamage: 50,
@@ -328,6 +343,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.Knight)
             .WithFaction(CreatureFaction.Hero)
             .WithName("Knight")
+            .WithDescription("A heavily armored warrior of the realm. Knights lead hero parties with their strong defense and holy strikes.")
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 1500, MeleeAttack: 95, MeleeDamage: 25,
                 Defense: 85, Armor: 20, Luck: 60, Speed: 32f,
@@ -344,6 +360,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.Wizard)
             .WithFaction(CreatureFaction.Hero)
             .WithName("Wizard")
+            .WithDescription("A master of the arcane arts. Wizards are fragile but unleash devastating spells from afar.")
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 800, MeleeAttack: 35, MeleeDamage: 7,
                 Defense: 40, Armor: 2, Luck: 80, Speed: 30f,
@@ -361,6 +378,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.Giant)
             .WithFaction(CreatureFaction.Hero)
             .WithName("Giant")
+            .WithDescription("A towering brute with enormous strength. Giants are slow but deal massive damage and can withstand heavy punishment.")
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 2500, MeleeAttack: 85, MeleeDamage: 40,
                 Defense: 60, Armor: 18, Luck: 30, Speed: 20f,
@@ -377,6 +395,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.Guard)
             .WithFaction(CreatureFaction.Hero)
             .WithName("Guard")
+            .WithDescription("A disciplined soldier who protects the realm. Guards are reliable fighters with solid defense.")
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 800, MeleeAttack: 70, MeleeDamage: 15,
                 Defense: 65, Armor: 10, Luck: 50, Speed: 32f,
@@ -392,6 +411,7 @@ public static class DK2CreatureData
             .WithType(CreatureType.Avatar)
             .WithFaction(CreatureFaction.Hero)
             .WithName("Avatar")
+            .WithDescription("The ultimate champion of good. The Avatar wields divine power, can resurrect fallen allies, and is nearly unstoppable.")
             .IsElite()
             .WithBaseStats(new CreatureBaseStats(
                 MaxHealth: 5000, MeleeAttack: 120, MeleeDamage: 45,

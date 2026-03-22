@@ -14,7 +14,7 @@ public class GodotCreaturePresenter : ICreaturePresenter
     private readonly Dictionary<EntityId, MeshInstance3D> _creatureNodes;
     private readonly Color _creatureColor;
 
-    private static readonly Dictionary<string, Color> CreatureColors = new()
+    internal static readonly Dictionary<string, Color> CreatureColors = new()
     {
         // Keeper creatures
         { "Imp", new Color(1.0f, 0.6f, 0.2f) },

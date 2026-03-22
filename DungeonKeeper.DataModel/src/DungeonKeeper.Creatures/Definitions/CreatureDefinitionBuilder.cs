@@ -24,6 +24,7 @@ public sealed class CreatureDefinitionBuilder
     private bool _isUndead;
     private bool _cannotBeAttractedViaPortal;
     private float _manaDrainPerSecond;
+    private string _description = string.Empty;
 
     public CreatureDefinitionBuilder WithType(CreatureType type)
     {
@@ -145,6 +146,12 @@ public sealed class CreatureDefinitionBuilder
         return this;
     }
 
+    public CreatureDefinitionBuilder WithDescription(string description)
+    {
+        _description = description;
+        return this;
+    }
+
     public CreatureDefinition Build()
     {
         if (string.IsNullOrEmpty(_name))
@@ -174,6 +181,7 @@ public sealed class CreatureDefinitionBuilder
             _canFly,
             _isUndead,
             _cannotBeAttractedViaPortal,
-            _manaDrainPerSecond);
+            _manaDrainPerSecond,
+            _description);
     }
 }

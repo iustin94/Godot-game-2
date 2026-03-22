@@ -5,6 +5,7 @@ using DungeonKeeper.Campaign.Levels;
 using DungeonKeeper.Core.Common;
 using DungeonKeeper.Core.Entities;
 using DungeonKeeper.Creatures.Components;
+using DungeonKeeper.Creatures.Data;
 using DungeonKeeper.Creatures.Definitions;
 using DungeonKeeper.Dungeon.Map;
 using DungeonKeeper.Dungeon.Rooms;
@@ -61,6 +62,14 @@ public partial class GameBootstrap : Node3D
 
     private const float DigDamagePerTick = 5f;
 
+    // Creature AI state (non-imp keeper creatures)
+    private readonly Dictionary<EntityId, IReadOnlyList<TileCoordinate>?> _creaturePaths = new();
+    private readonly Dictionary<EntityId, int> _creaturePathIndex = new();
+    private readonly Dictionary<EntityId, int> _creatureLastWanderTick = new();
+    private const int CreatureMoveInterval = 5;
+    private const int CreatureWanderInterval = 30;
+    private readonly Random _creatureRng = new();
+
     // Hero invasion state
     private readonly HashSet<EntityId> _heroIds = new();
     private readonly Dictionary<EntityId, IReadOnlyList<TileCoordinate>?> _heroPaths = new();
@@ -70,10 +79,17 @@ public partial class GameBootstrap : Node3D
     private const int HeroDigInterval = 20;
     private const int HeroPathRecalcInterval = 50;
 
+    // Creature viewer state
+    private CreatureDefinitionRegistry _creatureRegistry = null!;
+    private CreatureViewerDialog? _creatureViewer;
+
     public override void _Ready()
     {
         _roomRegistry = new RoomDefinitionRegistry();
         DK2RoomData.RegisterAll(_roomRegistry);
+
+        _creatureRegistry = new CreatureDefinitionRegistry();
+        DK2CreatureData.RegisterAll(_creatureRegistry);
 
         _campaign = CampaignLevelRegistry.CreateDefaultCampaign();
         ShowLevelSelect();
@@ -146,6 +162,9 @@ public partial class GameBootstrap : Node3D
         _heroPaths.Clear();
         _heroPathIndex.Clear();
         _heroDigCooldown.Clear();
+        _creaturePaths.Clear();
+        _creaturePathIndex.Clear();
+        _creatureLastWanderTick.Clear();
 
         // Create factory and session
         _factory = new GodotPresentationFactory(
@@ -172,6 +191,7 @@ public partial class GameBootstrap : Node3D
         var inputHandler = GetNode<InputHandler>("InputHandler");
         inputHandler.Initialize(_session, _factory.MapPresenter);
         inputHandler.SetRoomRegistry(_roomRegistry);
+        inputHandler.CreatureClicked += OnCreatureClicked;
 
         // Initialize HUD
         var hud = GetNode<HudOverlay>("CanvasLayer/HudOverlay");
@@ -302,6 +322,7 @@ public partial class GameBootstrap : Node3D
     private void TickGameSystems(GameTime gameTime)
     {
         TickImpAI(gameTime);
+        TickCreatureAI(gameTime);
         TickResources(gameTime);
         TickPortalSpawning(gameTime);
         TickHeroInvasion(gameTime);
@@ -523,6 +544,130 @@ public partial class GameBootstrap : Node3D
         presenter.OnMoved(entity.Id, oldPos, target);
     }
 
+    private void TickCreatureAI(GameTime gameTime)
+    {
+        if (_session.Players.Count == 0) return;
+        if (gameTime.TickNumber % CreatureMoveInterval != 0) return;
+
+        var player = _session.Players[0];
+
+        foreach (var creatureId in player.Dungeon.OwnedCreatureIds)
+        {
+            var entity = _session.Entities.TryGet(creatureId);
+            if (entity == null) continue;
+
+            var identity = entity.TryGetComponent<CreatureIdentityComponent>();
+            if (identity == null || identity.CreatureType == CreatureType.Imp) continue;
+
+            var movement = entity.TryGetComponent<MovementComponent>();
+            if (movement == null) continue;
+
+            var stats = entity.TryGetComponent<StatsComponent>();
+            if (stats == null || !stats.IsAlive) continue;
+
+            // Ensure creature is tracked
+            if (!_creaturePaths.ContainsKey(creatureId))
+            {
+                _creaturePaths[creatureId] = null;
+                _creaturePathIndex[creatureId] = 0;
+                _creatureLastWanderTick[creatureId] = 0;
+            }
+
+            TickSingleCreature(creatureId, entity, movement, gameTime);
+        }
+    }
+
+    private void TickSingleCreature(EntityId creatureId, IEntity entity, MovementComponent movement, GameTime gameTime)
+    {
+        // Try following existing path
+        if (CreatureFollowPath(creatureId, entity, movement))
+            return;
+
+        // Check if it's time to pick a new wander target
+        var lastWander = _creatureLastWanderTick.GetValueOrDefault(creatureId, 0);
+        if (gameTime.TickNumber - lastWander < CreatureWanderInterval) return;
+
+        _creatureLastWanderTick[creatureId] = gameTime.TickNumber;
+
+        var currentPos = movement.CurrentPosition;
+
+        // Find lair to wander near, or wander randomly
+        TileCoordinate? wanderTarget = null;
+        var player = _session.Players[0];
+
+        // If far from a lair, pathfind toward it
+        foreach (var room in player.Dungeon.OwnedRooms)
+        {
+            if (room.Type == RoomType.Lair && room.Tiles.Count > 0)
+            {
+                var lairCenter = room.Tiles[room.Tiles.Count / 2];
+                if (currentPos.ManhattanDistanceTo(lairCenter) > 4)
+                {
+                    var path = _pathfinding.FindPath(currentPos, lairCenter);
+                    if (path != null && path.Count > 1)
+                    {
+                        _creaturePaths[creatureId] = path;
+                        _creaturePathIndex[creatureId] = 1;
+                        CreatureFollowPath(creatureId, entity, movement);
+                        return;
+                    }
+                }
+                break;
+            }
+        }
+
+        // Idle wander: pick a random passable neighbor
+        var neighbors = currentPos.GetNeighbors().ToArray();
+        var passable = new List<TileCoordinate>();
+        foreach (var n in neighbors)
+        {
+            if (_session.Map.IsPassable(n))
+                passable.Add(n);
+        }
+
+        if (passable.Count > 0)
+        {
+            wanderTarget = passable[_creatureRng.Next(passable.Count)];
+            var oldPos = movement.CurrentPosition;
+            movement.CurrentPosition = wanderTarget.Value;
+
+            var identity = entity.TryGetComponent<CreatureIdentityComponent>();
+            var typeName = identity?.CreatureType.ToString() ?? "Creature";
+            var presenter = _session.PresentationFactory.CreateCreaturePresenter(entity.Id, typeName);
+            presenter.OnMoved(entity.Id, oldPos, wanderTarget.Value);
+        }
+    }
+
+    private bool CreatureFollowPath(EntityId creatureId, IEntity entity, MovementComponent movement)
+    {
+        if (!_creaturePaths.TryGetValue(creatureId, out var path) || path == null) return false;
+        if (!_creaturePathIndex.TryGetValue(creatureId, out var idx)) return false;
+        if (idx >= path.Count)
+        {
+            _creaturePaths[creatureId] = null;
+            return false;
+        }
+
+        var nextPos = path[idx];
+
+        if (!_session.Map.IsPassable(nextPos))
+        {
+            _creaturePaths[creatureId] = null;
+            return false;
+        }
+
+        var oldPos = movement.CurrentPosition;
+        movement.CurrentPosition = nextPos;
+        _creaturePathIndex[creatureId] = idx + 1;
+
+        var identity = entity.TryGetComponent<CreatureIdentityComponent>();
+        var typeName = identity?.CreatureType.ToString() ?? "Creature";
+        var presenter = _session.PresentationFactory.CreateCreaturePresenter(entity.Id, typeName);
+        presenter.OnMoved(entity.Id, oldPos, nextPos);
+
+        return true;
+    }
+
     private void TickResources(GameTime gameTime)
     {
         foreach (var player in _session.Players)
@@ -617,6 +762,11 @@ public partial class GameBootstrap : Node3D
 
         _session.Entities.Register(creature);
         player.Dungeon.AddCreature(creature.Id);
+
+        // Register in creature AI tracking
+        _creaturePaths[creature.Id] = null;
+        _creaturePathIndex[creature.Id] = 0;
+        _creatureLastWanderTick[creature.Id] = 0;
 
         var presenter = _session.PresentationFactory.CreateCreaturePresenter(creature.Id, typeName);
         presenter.OnSpawned(creature.Id, position);
@@ -952,7 +1102,37 @@ public partial class GameBootstrap : Node3D
         _impDigTargets.Remove(creatureId);
         _impPaths.Remove(creatureId);
         _impPathIndex.Remove(creatureId);
+        _creaturePaths.Remove(creatureId);
+        _creaturePathIndex.Remove(creatureId);
+        _creatureLastWanderTick.Remove(creatureId);
         GD.Print($"A keeper creature has been slain by heroes!");
+    }
+
+    private void OnCreatureClicked(EntityId entityId)
+    {
+        if (_phase != GamePhase.Playing) return;
+        if (_creatureViewer != null) return; // Already viewing
+
+        var entity = _session.Entities.TryGet(entityId);
+        if (entity == null) return;
+
+        var identity = entity.TryGetComponent<CreatureIdentityComponent>();
+        CreatureDefinition? definition = null;
+        if (identity != null)
+        {
+            try { definition = _creatureRegistry.Get(identity.CreatureType); }
+            catch (KeyNotFoundException) { }
+        }
+
+        _paused = true;
+        _creatureViewer = new CreatureViewerDialog();
+        GetNode<CanvasLayer>("CanvasLayer").AddChild(_creatureViewer);
+        _creatureViewer.Initialize(entity, definition);
+        _creatureViewer.Closed += () =>
+        {
+            _creatureViewer = null;
+            _paused = false;
+        };
     }
 
     private void CleanupDeadHeroes()

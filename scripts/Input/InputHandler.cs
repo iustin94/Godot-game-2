@@ -1,5 +1,7 @@
 using DungeonKeeper.Core.Common;
 using DungeonKeeper.Core.Entities;
+using DungeonKeeper.Creatures.Components;
+using DungeonKeeper.Creatures.Definitions;
 using DungeonKeeper.Dungeon.Map;
 using DungeonKeeper.Dungeon.Placement;
 using DungeonKeeper.Dungeon.Rooms;
@@ -12,6 +14,8 @@ namespace DungeonKeeper.Scripts.Input;
 
 public partial class InputHandler : Node3D
 {
+    public event Action<EntityId>? CreatureClicked;
+
     private GameSession? _session;
     private GodotMapPresenter? _mapPresenter;
     private RoomDefinitionRegistry? _roomRegistry;
@@ -66,6 +70,14 @@ public partial class InputHandler : Node3D
         if (_selectedRoomType != null)
         {
             TryPlaceRoomTile(coord);
+            return;
+        }
+
+        // Check for creature at this tile
+        var creatureId = FindCreatureAtTile(coord);
+        if (creatureId != null)
+        {
+            CreatureClicked?.Invoke(creatureId.Value);
             return;
         }
 
@@ -204,6 +216,30 @@ public partial class InputHandler : Node3D
                 if (room.Id == tile.RoomInstanceId && room.Type == type && room.OwnerId == ownerId)
                     return room;
             }
+        }
+        return null;
+    }
+
+    private EntityId? FindCreatureAtTile(TileCoordinate coord)
+    {
+        if (_session == null) return null;
+        foreach (var player in _session.Players)
+        {
+            foreach (var creatureId in player.Dungeon.OwnedCreatureIds)
+            {
+                var entity = _session.Entities.TryGet(creatureId);
+                if (entity == null) continue;
+                var movement = entity.TryGetComponent<MovementComponent>();
+                if (movement?.CurrentPosition == coord) return creatureId;
+            }
+        }
+        // Also check heroes
+        foreach (var entity in _session.Entities.GetAll())
+        {
+            var identity = entity.TryGetComponent<CreatureIdentityComponent>();
+            if (identity == null || identity.Faction != CreatureFaction.Hero) continue;
+            var movement = entity.TryGetComponent<MovementComponent>();
+            if (movement?.CurrentPosition == coord) return entity.Id;
         }
         return null;
     }
