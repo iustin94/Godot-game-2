@@ -9,6 +9,7 @@ using DungeonKeeper.Creatures.Definitions;
 using DungeonKeeper.Dungeon.Map;
 using DungeonKeeper.Dungeon.Rooms;
 using DungeonKeeper.GameState;
+using DungeonKeeper.Keeper.HeroInvasion;
 using DungeonKeeper.Scripts.Input;
 using DungeonKeeper.Scripts.Presenters;
 using DungeonKeeper.Scripts.UI;
@@ -59,6 +60,15 @@ public partial class GameBootstrap : Node3D
     private readonly Dictionary<EntityId, int> _impPathIndex = new();
 
     private const float DigDamagePerTick = 5f;
+
+    // Hero invasion state
+    private readonly HashSet<EntityId> _heroIds = new();
+    private readonly Dictionary<EntityId, IReadOnlyList<TileCoordinate>?> _heroPaths = new();
+    private readonly Dictionary<EntityId, int> _heroPathIndex = new();
+    private readonly Dictionary<EntityId, int> _heroDigCooldown = new();
+    private const int HeroMoveInterval = 3;
+    private const int HeroDigInterval = 20;
+    private const int HeroPathRecalcInterval = 50;
 
     public override void _Ready()
     {
@@ -132,6 +142,10 @@ public partial class GameBootstrap : Node3D
         _impDigTargets.Clear();
         _impPaths.Clear();
         _impPathIndex.Clear();
+        _heroIds.Clear();
+        _heroPaths.Clear();
+        _heroPathIndex.Clear();
+        _heroDigCooldown.Clear();
 
         // Create factory and session
         _factory = new GodotPresentationFactory(
@@ -290,6 +304,7 @@ public partial class GameBootstrap : Node3D
         TickImpAI(gameTime);
         TickResources(gameTime);
         TickPortalSpawning(gameTime);
+        TickHeroInvasion(gameTime);
         CheckVictoryConditions();
     }
 
@@ -624,5 +639,349 @@ public partial class GameBootstrap : Node3D
             }
         }
         return result;
+    }
+
+    // ──────────────────────────────────────────────────────────
+    //  Hero Invasion System
+    // ──────────────────────────────────────────────────────────
+
+    private void TickHeroInvasion(GameTime gameTime)
+    {
+        if (_currentLevel == null || _session.Players.Count == 0) return;
+
+        var player = _session.Players[0];
+        var scheduler = player.Dungeon.InvasionScheduler;
+
+        // Check for new wave
+        var wave = scheduler.GetWaveForTick(gameTime.TickNumber);
+        if (wave != null)
+        {
+            SpawnHeroWave(wave);
+        }
+
+        // Tick existing heroes
+        TickHeroMovementAndCombat(gameTime);
+
+        // Clean up dead heroes
+        CleanupDeadHeroes();
+    }
+
+    private void SpawnHeroWave(InvasionWave wave)
+    {
+        foreach (var group in wave.Groups)
+        {
+            for (int i = 0; i < group.Count; i++)
+            {
+                // Offset spawn positions slightly so they don't all stack
+                var spawnPos = new TileCoordinate(
+                    wave.EntryPoint.X + (i % 3) - 1,
+                    wave.EntryPoint.Y);
+
+                // Ensure spawn position is valid
+                if (_session.Map.GetTile(spawnPos) == null || !_session.Map.IsPassable(spawnPos))
+                    spawnPos = wave.EntryPoint;
+
+                SpawnHero(group.HeroType, group.Level, spawnPos);
+            }
+        }
+
+        GD.Print($"Hero wave {wave.WaveNumber} has arrived!");
+    }
+
+    private EntityId SpawnHero(CreatureType heroType, int level, TileCoordinate position)
+    {
+        var hero = new Entity();
+        var typeName = heroType.ToString();
+
+        var (baseHp, baseAtk, baseDmg, baseDef) = heroType switch
+        {
+            CreatureType.Knight => (100, 10, 8, 6),
+            CreatureType.Wizard => (60, 6, 12, 3),
+            _ => (80, 8, 6, 4),
+        };
+
+        hero.AddComponent(new CreatureIdentityComponent
+        {
+            CreatureType = heroType,
+            Faction = CreatureFaction.Hero,
+            OwnerId = default
+        });
+        hero.AddComponent(new StatsComponent
+        {
+            CurrentHealth = baseHp * level,
+            MaxHealth = baseHp * level,
+            Level = level,
+            Speed = 1.5f,
+            MeleeAttack = baseAtk * level,
+            MeleeDamage = baseDmg * level,
+            Defense = baseDef * level
+        });
+        hero.AddComponent(new MovementComponent
+        {
+            CurrentPosition = position
+        });
+
+        _session.Entities.Register(hero);
+        _heroIds.Add(hero.Id);
+        _heroPaths[hero.Id] = null;
+        _heroPathIndex[hero.Id] = 0;
+        _heroDigCooldown[hero.Id] = 0;
+
+        var presenter = _session.PresentationFactory.CreateCreaturePresenter(hero.Id, typeName);
+        presenter.OnSpawned(hero.Id, position);
+
+        return hero.Id;
+    }
+
+    private void TickHeroMovementAndCombat(GameTime gameTime)
+    {
+        if (_currentLevel == null || _session.Players.Count == 0) return;
+
+        var heartCenter = _currentLevel.PlayerStart.DungeonHeartCenter;
+        var player = _session.Players[0];
+
+        foreach (var heroId in _heroIds)
+        {
+            var entity = _session.Entities.TryGet(heroId);
+            if (entity == null) continue;
+
+            var stats = entity.TryGetComponent<StatsComponent>();
+            if (stats == null || !stats.IsAlive) continue;
+
+            var movement = entity.TryGetComponent<MovementComponent>();
+            if (movement == null) continue;
+
+            var identity = entity.TryGetComponent<CreatureIdentityComponent>();
+            var currentPos = movement.CurrentPosition;
+
+            // Combat: check for adjacent keeper creatures and fight
+            bool inCombat = TickHeroCombat(heroId, entity, stats, currentPos, player);
+
+            // If adjacent to dungeon heart, damage it
+            TickHeroHeartDamage(stats, currentPos, heartCenter, player);
+
+            // Movement: only move if not in combat
+            if (!inCombat && gameTime.TickNumber % HeroMoveInterval == 0)
+            {
+                TickHeroMovement(heroId, entity, movement, heartCenter, gameTime);
+            }
+        }
+
+        // Keeper creatures fight back against adjacent heroes
+        TickKeeperCombat(player, gameTime);
+    }
+
+    private bool TickHeroCombat(EntityId heroId, IEntity hero, StatsComponent heroStats,
+        TileCoordinate heroPos, Player player)
+    {
+        bool foundTarget = false;
+
+        foreach (var neighbor in heroPos.GetNeighbors())
+        {
+            // Find keeper creature at this position
+            foreach (var creatureId in player.Dungeon.OwnedCreatureIds)
+            {
+                var creature = _session.Entities.TryGet(creatureId);
+                if (creature == null) continue;
+
+                var creatureMovement = creature.TryGetComponent<MovementComponent>();
+                if (creatureMovement == null || creatureMovement.CurrentPosition != neighbor) continue;
+
+                var creatureStats = creature.TryGetComponent<StatsComponent>();
+                if (creatureStats == null || !creatureStats.IsAlive) continue;
+
+                // Hero attacks keeper creature
+                int damage = Math.Max(1, heroStats.MeleeDamage - creatureStats.Defense);
+                creatureStats.CurrentHealth -= damage;
+                foundTarget = true;
+
+                if (!creatureStats.IsAlive)
+                {
+                    RemoveKeeperCreature(creatureId, player);
+                }
+                break; // Only attack one target per tick
+            }
+            if (foundTarget) break;
+        }
+
+        return foundTarget;
+    }
+
+    private void TickHeroHeartDamage(StatsComponent heroStats, TileCoordinate heroPos,
+        TileCoordinate heartCenter, Player player)
+    {
+        if (heroPos.ManhattanDistanceTo(heartCenter) > 2) return;
+
+        // Check if hero is on a dungeon heart tile
+        var tile = _session.Map.GetTile(heroPos);
+        if (tile == null || tile.RoomType != RoomType.DungeonHeart) return;
+
+        // Damage the heart
+        foreach (var room in player.Dungeon.OwnedRooms)
+        {
+            if (room.Type == RoomType.DungeonHeart)
+            {
+                room.Health -= Math.Max(1, heroStats.MeleeDamage);
+                break;
+            }
+        }
+    }
+
+    private void TickKeeperCombat(Player player, GameTime gameTime)
+    {
+        foreach (var creatureId in player.Dungeon.OwnedCreatureIds)
+        {
+            var creature = _session.Entities.TryGet(creatureId);
+            if (creature == null) continue;
+
+            var creatureStats = creature.TryGetComponent<StatsComponent>();
+            if (creatureStats == null || !creatureStats.IsAlive) continue;
+
+            var creatureMovement = creature.TryGetComponent<MovementComponent>();
+            if (creatureMovement == null) continue;
+
+            var creaturePos = creatureMovement.CurrentPosition;
+
+            // Check for adjacent heroes
+            foreach (var neighbor in creaturePos.GetNeighbors())
+            {
+                bool attacked = false;
+                foreach (var heroId in _heroIds)
+                {
+                    var heroEntity = _session.Entities.TryGet(heroId);
+                    if (heroEntity == null) continue;
+
+                    var heroMovement = heroEntity.TryGetComponent<MovementComponent>();
+                    if (heroMovement == null || heroMovement.CurrentPosition != neighbor) continue;
+
+                    var heroStats = heroEntity.TryGetComponent<StatsComponent>();
+                    if (heroStats == null || !heroStats.IsAlive) continue;
+
+                    int damage = Math.Max(1, creatureStats.MeleeDamage - heroStats.Defense);
+                    heroStats.CurrentHealth -= damage;
+                    attacked = true;
+                    break;
+                }
+                if (attacked) break;
+            }
+        }
+    }
+
+    private void TickHeroMovement(EntityId heroId, IEntity entity, MovementComponent movement,
+        TileCoordinate target, GameTime gameTime)
+    {
+        var currentPos = movement.CurrentPosition;
+
+        // Try to follow existing path
+        if (HeroFollowPath(heroId, entity, movement))
+            return;
+
+        // Recalculate path
+        var path = _pathfinding.FindPath(currentPos, target);
+        if (path != null && path.Count > 1)
+        {
+            _heroPaths[heroId] = path;
+            _heroPathIndex[heroId] = 1;
+            HeroFollowPath(heroId, entity, movement);
+            return;
+        }
+
+        // No path — try to dig through an adjacent earth tile (siege behavior)
+        if (!_heroDigCooldown.TryGetValue(heroId, out var cooldown))
+            cooldown = 0;
+
+        if (cooldown <= 0)
+        {
+            foreach (var neighbor in currentPos.GetNeighbors())
+            {
+                var tile = _session.Map.GetTile(neighbor);
+                if (tile != null && (tile.Type == TileType.Earth || tile.Type == TileType.Gold))
+                {
+                    tile.Health -= DigDamagePerTick;
+                    if (tile.Health <= 0)
+                    {
+                        // Dig it out as unclaimed path
+                        tile.Type = TileType.ClaimedPath;
+                        tile.OwnerId = default;
+                        tile.IsMarkedForDigging = false;
+                        tile.Health = 100f;
+
+                        _factory.MapPresenter.OnTileDug(neighbor);
+                        _pathfinding = new AStarPathfinding(_session.Map);
+                    }
+                    _heroDigCooldown[heroId] = HeroDigInterval;
+                    break;
+                }
+            }
+        }
+        else
+        {
+            _heroDigCooldown[heroId] = cooldown - 1;
+        }
+    }
+
+    private bool HeroFollowPath(EntityId heroId, IEntity entity, MovementComponent movement)
+    {
+        if (!_heroPaths.TryGetValue(heroId, out var path) || path == null) return false;
+        if (!_heroPathIndex.TryGetValue(heroId, out var idx)) return false;
+        if (idx >= path.Count) return false;
+
+        var nextPos = path[idx];
+
+        if (!_session.Map.IsPassable(nextPos))
+        {
+            _heroPaths[heroId] = null;
+            return false;
+        }
+
+        var oldPos = movement.CurrentPosition;
+        movement.CurrentPosition = nextPos;
+        _heroPathIndex[heroId] = idx + 1;
+
+        var identity = entity.TryGetComponent<CreatureIdentityComponent>();
+        var typeName = identity?.CreatureType.ToString() ?? "Knight";
+        var presenter = _session.PresentationFactory.CreateCreaturePresenter(entity.Id, typeName);
+        presenter.OnMoved(entity.Id, oldPos, nextPos);
+
+        return true;
+    }
+
+    private void RemoveKeeperCreature(EntityId creatureId, Player player)
+    {
+        player.Dungeon.RemoveCreature(creatureId);
+        _impDigTargets.Remove(creatureId);
+        _impPaths.Remove(creatureId);
+        _impPathIndex.Remove(creatureId);
+        GD.Print($"A keeper creature has been slain by heroes!");
+    }
+
+    private void CleanupDeadHeroes()
+    {
+        var dead = new List<EntityId>();
+
+        foreach (var heroId in _heroIds)
+        {
+            var entity = _session.Entities.TryGet(heroId);
+            if (entity == null)
+            {
+                dead.Add(heroId);
+                continue;
+            }
+
+            var stats = entity.TryGetComponent<StatsComponent>();
+            if (stats == null || !stats.IsAlive)
+            {
+                dead.Add(heroId);
+            }
+        }
+
+        foreach (var heroId in dead)
+        {
+            _heroIds.Remove(heroId);
+            _heroPaths.Remove(heroId);
+            _heroPathIndex.Remove(heroId);
+            _heroDigCooldown.Remove(heroId);
+            GD.Print("A hero has been defeated!");
+        }
     }
 }

@@ -5,6 +5,7 @@ using DungeonKeeper.Core.Common;
 using DungeonKeeper.Creatures.Definitions;
 using DungeonKeeper.Dungeon.Map;
 using DungeonKeeper.Dungeon.Rooms;
+using DungeonKeeper.Keeper.HeroInvasion;
 using DungeonKeeper.Spells;
 using DungeonKeeper.Traps;
 
@@ -47,6 +48,17 @@ public static class CampaignLevelRegistry
 
         // Small water pool
         blueprint.AddPool(new TileCoordinate(38, 38), TileType.Water, 3);
+
+        // Hero gate entry corridor — carve passable tiles near the north border
+        for (int y = 3; y <= 7; y++)
+        {
+            blueprint.AddTile(new TileBlueprintEntry
+            {
+                Coordinate = new TileCoordinate(25, y),
+                Type = TileType.ClaimedPath,
+                IsRevealed = false
+            });
+        }
 
         return new LevelDefinition
         {
@@ -103,9 +115,45 @@ public static class CampaignLevelRegistry
                 new DungeonHeartDestroyedCondition(),
             },
 
-            // No hero waves for level 1 — pure tutorial
-            HeroWaves = Array.Empty<Waves.WaveDefinition>(),
-            HeroGates = Array.Empty<HeroGateDefinition>(),
+            HeroGates = new HeroGateDefinition[]
+            {
+                new() { GateId = "gate_north", Location = new TileCoordinate(25, 5) }
+            },
+            HeroWaves = new Waves.WaveDefinition[]
+            {
+                new()
+                {
+                    WaveNumber = 1,
+                    ScheduledTick = 3000, // ~5 minutes
+                    SourceGateId = "gate_north",
+                    Groups = new InvasionGroup[]
+                    {
+                        new(CreatureType.Knight, Count: 2, Level: 1)
+                    }
+                },
+                new()
+                {
+                    WaveNumber = 2,
+                    ScheduledTick = 6000, // ~10 minutes
+                    SourceGateId = "gate_north",
+                    Groups = new InvasionGroup[]
+                    {
+                        new(CreatureType.Knight, Count: 3, Level: 2),
+                        new(CreatureType.Wizard, Count: 1, Level: 2)
+                    }
+                },
+                new()
+                {
+                    WaveNumber = 3,
+                    ScheduledTick = 9000, // ~15 minutes
+                    SourceGateId = "gate_north",
+                    Groups = new InvasionGroup[]
+                    {
+                        new(CreatureType.Knight, Count: 4, Level: 3),
+                        new(CreatureType.Wizard, Count: 2, Level: 3)
+                    }
+                },
+            },
             EnemyKeepers = Array.Empty<EnemyKeeperDefinition>(),
         };
     }

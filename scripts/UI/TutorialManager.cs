@@ -1,4 +1,5 @@
 using DungeonKeeper.Dungeon.Map;
+using DungeonKeeper.Dungeon.Rooms;
 using DungeonKeeper.GameState;
 using Godot;
 
@@ -7,6 +8,7 @@ namespace DungeonKeeper.Scripts.UI;
 public partial class TutorialManager : Node
 {
 	private record TutorialStep(string Message, string ButtonText, Func<bool>? AutoAdvance = null, bool UnpauseDuringStep = false);
+	private record DeferredTutorialStep(string Message, string ButtonText, Func<bool> Trigger);
 
 	private GameSession _session = null!;
 	private TutorialDialog _dialog = null!;
@@ -15,6 +17,9 @@ public partial class TutorialManager : Node
 	private int _currentStep = -1;
 	private bool _waitingForAutoAdvance;
 	private int _initialGold;
+	private int _startingCreatureCount;
+	private bool _mainTutorialComplete;
+	private List<DeferredTutorialStep> _deferredSteps = new();
 
 	public void Initialize(GameSession session, TutorialDialog dialog, Action<bool> setPaused)
 	{
@@ -23,6 +28,7 @@ public partial class TutorialManager : Node
 		_setPaused = setPaused;
 
 		_initialGold = session.Players.Count > 0 ? session.Players[0].Dungeon.Gold.Current : 0;
+		_startingCreatureCount = session.Players.Count > 0 ? session.Players[0].Dungeon.OwnedCreatureIds.Count : 0;
 
 		_steps = new List<TutorialStep>
 		{
@@ -73,8 +79,53 @@ public partial class TutorialManager : Node
 			new(
 				"[b]One more thing...[/b]\n\n" +
 				"Press [b]P[/b] to pause the game at any time.\n\n" +
-				"That's the basics -- now go build your dungeon, Keeper!",
+				"Now let's build some rooms!",
+                "Next"
+			),
+			new(
+				"[b]Building Rooms[/b]\n\n" +
+				"Look at the [b]room panel[/b] on the right side of the screen. " +
+				"Click a room type, then click on [color=#cccccc]claimed path tiles[/color] to place it.\n\n" +
+				"Build all four rooms:\n" +
+				"- [b]Lair[/b] — creatures sleep here\n" +
+				"- [b]Hatchery[/b] — feeds your creatures\n" +
+				"- [b]Treasury[/b] — stores your gold\n" +
+				"- [b]Portal[/b] — attracts creatures to your dungeon\n\n" +
+				"[color=#ffff66]Build all four rooms to continue.[/color]",
+				"Waiting...",
+				AutoAdvance: () => HasAllRequiredRooms(),
+				UnpauseDuringStep: true
+			),
+			new(
+				"[b]Creatures![/b]\n\n" +
+				"Now that you have a [b]Portal[/b], [b]Lair[/b], and [b]Hatchery[/b], " +
+				"creatures will start arriving through the portal every 30 seconds.\n\n" +
+				"[color=#ffff66]Wait for your first creature to arrive...[/color]",
+				"Waiting...",
+				AutoAdvance: () => HasAttractedCreature(),
+				UnpauseDuringStep: true
+			),
+			new(
+				"[b]Your Goal[/b]\n\n" +
+				"Attract [b]4 creatures[/b] (8 total including your imps) to claim this realm.\n\n" +
+				"But beware — [color=#4488ff]heroes[/color] will invade your dungeon! " +
+				"Your creatures will fight them when they get close. " +
+				"Keep building and defend your [color=#ff4444]Dungeon Heart[/color]!\n\n" +
+				"Good luck, Keeper!",
                 "Start playing!"
+			),
+		};
+
+		_deferredSteps = new List<DeferredTutorialStep>
+		{
+			new(
+				"[b]Heroes Approaching![/b]\n\n" +
+				"A band of [color=#4488ff]heroes[/color] has entered your dungeon! " +
+				"They will march toward your [b]Dungeon Heart[/b] and try to destroy it.\n\n" +
+				"Your creatures will fight them automatically when they get close. " +
+				"Make sure you have enough creatures to defend!",
+				"Defend!",
+				Trigger: () => IsHeroWaveImminent()
 			),
 		};
 
@@ -84,6 +135,21 @@ public partial class TutorialManager : Node
 
 	public override void _Process(double delta)
 	{
+		if (_mainTutorialComplete)
+		{
+			if (_deferredSteps.Count > 0)
+			{
+				var deferred = _deferredSteps[0];
+				if (deferred.Trigger())
+				{
+					_deferredSteps.RemoveAt(0);
+					_dialog.ShowMessage(deferred.Message, deferred.ButtonText);
+					_setPaused?.Invoke(true);
+				}
+			}
+			return;
+		}
+
 		if (_currentStep < 0 || _currentStep >= _steps.Count) return;
 		if (!_waitingForAutoAdvance) return;
 
@@ -97,6 +163,16 @@ public partial class TutorialManager : Node
 
 	private void OnDialogDismissed()
 	{
+		if (_mainTutorialComplete)
+		{
+			_setPaused?.Invoke(false);
+			if (_deferredSteps.Count == 0)
+			{
+				_dialog.Dismissed -= OnDialogDismissed;
+				QueueFree();
+			}
+			return;
+		}
 		if (_waitingForAutoAdvance) return; // Don't advance on button click if waiting for condition
 		AdvanceStep();
 	}
@@ -107,12 +183,17 @@ public partial class TutorialManager : Node
 
 		if (_currentStep >= _steps.Count)
 		{
-			// Tutorial complete
+			// Main tutorial complete
+			_mainTutorialComplete = true;
 			_setPaused?.Invoke(false);
 			_dialog.HideDialog();
-			_dialog.Dismissed -= OnDialogDismissed;
-			QueueFree();
 			GD.Print("Tutorial complete!");
+
+			if (_deferredSteps.Count == 0)
+			{
+				_dialog.Dismissed -= OnDialogDismissed;
+				QueueFree();
+			}
 			return;
 		}
 
@@ -163,5 +244,30 @@ public partial class TutorialManager : Node
 
 		// Initial starting area is 5x5 = 25 claimed tiles (minus 9 room tiles = 16 claimed paths)
 		return claimedCount > 16;
+	}
+
+	private bool HasAllRequiredRooms()
+	{
+		if (_session.Players.Count == 0) return false;
+		var dungeon = _session.Players[0].Dungeon;
+		return dungeon.HasRoom(RoomType.Lair)
+			&& dungeon.HasRoom(RoomType.Hatchery)
+			&& dungeon.HasRoom(RoomType.Treasury)
+			&& dungeon.HasRoom(RoomType.Portal);
+	}
+
+	private bool HasAttractedCreature()
+	{
+		if (_session.Players.Count == 0) return false;
+		return _session.Players[0].Dungeon.OwnedCreatureIds.Count > _startingCreatureCount;
+	}
+
+	private bool IsHeroWaveImminent()
+	{
+		if (_session.Players.Count == 0) return false;
+		var scheduler = _session.Players[0].Dungeon.InvasionScheduler;
+		int currentTick = _session.Clock.CurrentTick;
+		var upcoming = scheduler.GetUpcomingWaves(currentTick);
+		return upcoming.Count > 0 && upcoming[0].ScheduledTick <= currentTick + 100;
 	}
 }
