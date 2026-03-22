@@ -14,4 +14,5 @@ public class Tile
     public int GoldRemaining { get; set; }
     public float Health { get; set; }
     public bool IsRevealed { get; set; }
+    public bool IsMarkedForDigging { get; set; }
 }

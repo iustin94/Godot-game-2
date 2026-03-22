@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <Compile Remove="DungeonKeeper.DataModel/**/*.cs" />
+    <Compile Remove="GameCore/**/*.cs" />
   </ItemGroup>
 
   <ItemGroup>
