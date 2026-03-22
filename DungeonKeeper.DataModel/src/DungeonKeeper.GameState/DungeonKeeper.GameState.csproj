@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\DungeonKeeper.Core\DungeonKeeper.Core.csproj" />
+    <ProjectReference Include="..\DungeonKeeper.Resources\DungeonKeeper.Resources.csproj" />
+    <ProjectReference Include="..\DungeonKeeper.Dungeon\DungeonKeeper.Dungeon.csproj" />
+    <ProjectReference Include="..\DungeonKeeper.Creatures\DungeonKeeper.Creatures.csproj" />
+    <ProjectReference Include="..\DungeonKeeper.Combat\DungeonKeeper.Combat.csproj" />
+    <ProjectReference Include="..\DungeonKeeper.Spells\DungeonKeeper.Spells.csproj" />
+    <ProjectReference Include="..\DungeonKeeper.Traps\DungeonKeeper.Traps.csproj" />
+    <ProjectReference Include="..\DungeonKeeper.Keeper\DungeonKeeper.Keeper.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

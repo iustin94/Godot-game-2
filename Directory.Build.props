@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Disable MSBuild node reuse to avoid /proc access issues in snap sandbox -->
+    <UseSharedCompilation>false</UseSharedCompilation>
+  </PropertyGroup>
+</Project>
