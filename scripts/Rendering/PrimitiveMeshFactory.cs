@@ -57,6 +57,75 @@ public static class PrimitiveMeshFactory
         return new MeshInstance3D { Mesh = mesh };
     }
 
+    /// <summary>
+    /// Creates a 3D box structure for a room tile, sitting on top of the ground.
+    /// </summary>
+    public static MeshInstance3D CreateRoomBlock(Color color, float height = 0.3f)
+    {
+        var mesh = new BoxMesh
+        {
+            Size = new Vector3(0.92f, height, 0.92f)
+        };
+
+        var material = new StandardMaterial3D
+        {
+            AlbedoColor = color,
+            Roughness = 0.65f,
+            Metallic = 0.05f
+        };
+        mesh.Material = material;
+
+        return new MeshInstance3D { Mesh = mesh };
+    }
+
+    /// <summary>
+    /// Creates a tall, imposing Dungeon Heart structure with emission glow.
+    /// </summary>
+    public static MeshInstance3D CreateDungeonHeart(Color color)
+    {
+        var mesh = new BoxMesh
+        {
+            Size = new Vector3(0.85f, 0.6f, 0.85f)
+        };
+
+        var material = new StandardMaterial3D
+        {
+            AlbedoColor = color,
+            Roughness = 0.4f,
+            Metallic = 0.2f,
+            Emission = new Color(0.6f, 0.0f, 0.0f),
+            EmissionEnergyMultiplier = 0.5f
+        };
+        mesh.Material = material;
+
+        return new MeshInstance3D { Mesh = mesh };
+    }
+
+    /// <summary>
+    /// Creates a Portal structure — a glowing cylinder.
+    /// </summary>
+    public static MeshInstance3D CreatePortalStructure(Color color)
+    {
+        var mesh = new CylinderMesh
+        {
+            Height = 0.4f,
+            TopRadius = 0.35f,
+            BottomRadius = 0.42f
+        };
+
+        var material = new StandardMaterial3D
+        {
+            AlbedoColor = color,
+            Roughness = 0.3f,
+            Metallic = 0.15f,
+            Emission = new Color(0.8f, 0.0f, 0.8f),
+            EmissionEnergyMultiplier = 0.4f
+        };
+        mesh.Material = material;
+
+        return new MeshInstance3D { Mesh = mesh };
+    }
+
     public static MeshInstance3D CreateSphere(Color color, float radius = 0.15f)
     {
         var mesh = new SphereMesh
